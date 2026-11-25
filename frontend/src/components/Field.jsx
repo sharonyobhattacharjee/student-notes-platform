@@ -1,0 +1,1 @@
+export function Field({label,children,hint,error}){return <label className="field"><span>{label}</span>{children}{hint&&<small>{hint}</small>}{error&&<small className="error-text">{error}</small>}</label>}

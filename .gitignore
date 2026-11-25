@@ -1,0 +1,13 @@
+node_modules/
+.env
+.env.*
+!.env.example
+dist/
+build/
+backend/storage/notes/*
+!backend/storage/notes/.gitkeep
+*.log
+.DS_Store
+.neon
+
+backend/.vercel-production-env

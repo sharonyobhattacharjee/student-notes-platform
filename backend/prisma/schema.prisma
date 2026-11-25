@@ -1,0 +1,251 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model RoleDefinition {
+  id    Int    @id @default(autoincrement())
+  name  Role   @unique
+  users User[]
+}
+
+model User {
+  id               String         @id @default(uuid())
+  roleId           Int
+  name             String
+  email            String         @unique
+  passwordHash     String
+  institution      String?
+  status           UserStatus     @default(ACTIVE)
+  emailVerified    Boolean        @default(false)
+  failedLoginCount Int            @default(0)
+  lockedUntil      DateTime?
+  createdAt        DateTime       @default(now())
+  lastLoginAt      DateTime?
+  auditLogs        AuditLog[]
+  authTokens       AuthToken[]
+  downloads        DownloadLog[]
+  notes            Note[]         @relation("UploaderNotes")
+  sharesSent       NoteShare[]    @relation("ShareSender")
+  sharesReceived   NoteShare[]    @relation("ShareRecipient")
+  reports          Report[]       @relation("ReporterReports")
+  resolvedReports  Report[]       @relation("ResolverReports")
+  reviews          Review[]
+  shareLinks       ShareLink[]
+  role             RoleDefinition @relation(fields: [roleId], references: [id])
+
+  @@index([status])
+  @@index([createdAt])
+}
+
+model Subject {
+  id    Int    @id @default(autoincrement())
+  name  String @unique
+  notes Note[]
+}
+
+model Course {
+  id    Int    @id @default(autoincrement())
+  name  String @unique
+  notes Note[]
+}
+
+model Category {
+  id    Int    @id @default(autoincrement())
+  name  String @unique
+  notes Note[]
+}
+
+model Note {
+  id            String        @id @default(uuid())
+  uploaderId    String
+  subjectId     Int
+  courseId      Int?
+  categoryId    Int?
+  title         String
+  topic         String?
+  semester      Int
+  description   String?
+  visibility    Visibility    @default(PUBLIC)
+  status        NoteStatus    @default(ACTIVE)
+  downloadCount Int           @default(0)
+  uploadedAt    DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  downloads     DownloadLog[]
+  category      Category?     @relation(fields: [categoryId], references: [id])
+  course        Course?       @relation(fields: [courseId], references: [id])
+  subject       Subject       @relation(fields: [subjectId], references: [id])
+  uploader      User          @relation("UploaderNotes", fields: [uploaderId], references: [id])
+  file          NoteFile?
+  shares        NoteShare[]
+  reports       Report[]
+  reviews       Review[]
+  shareLinks    ShareLink[]
+
+  @@index([uploaderId])
+  @@index([subjectId, semester])
+  @@index([visibility, status])
+  @@index([uploadedAt])
+  @@index([title])
+}
+
+model NoteFile {
+  id             String   @id @default(uuid())
+  noteId         String   @unique
+  originalName   String
+  storedName     String   @unique
+  fileType       String
+  fileSizeBytes  Int
+  checksumSha256 String
+  uploadedAt     DateTime @default(now())
+  note           Note     @relation(fields: [noteId], references: [id], onDelete: Cascade)
+}
+
+model ShareLink {
+  id        String    @id @default(uuid())
+  noteId    String
+  createdBy String
+  tokenHash String    @unique
+  tokenHint String
+  createdAt DateTime  @default(now())
+  expiresAt DateTime?
+  isActive  Boolean   @default(true)
+  creator   User      @relation(fields: [createdBy], references: [id])
+  note      Note      @relation(fields: [noteId], references: [id], onDelete: Cascade)
+
+  @@index([noteId, isActive])
+}
+
+model NoteShare {
+  id         String   @id @default(uuid())
+  noteId     String
+  sharedWith String
+  sharedBy   String
+  sharedAt   DateTime @default(now())
+  note       Note     @relation(fields: [noteId], references: [id], onDelete: Cascade)
+  sender     User     @relation("ShareSender", fields: [sharedBy], references: [id])
+  recipient  User     @relation("ShareRecipient", fields: [sharedWith], references: [id])
+
+  @@unique([noteId, sharedWith])
+  @@index([sharedWith])
+}
+
+model Review {
+  id        String       @id @default(uuid())
+  noteId    String
+  userId    String
+  rating    Int
+  comment   String?
+  status    ReviewStatus @default(ACTIVE)
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+  reports   Report[]
+  note      Note         @relation(fields: [noteId], references: [id], onDelete: Cascade)
+  user      User         @relation(fields: [userId], references: [id])
+
+  @@unique([noteId, userId])
+  @@index([noteId, status])
+}
+
+model Report {
+  id         String       @id @default(uuid())
+  reporterId String
+  noteId     String?
+  reviewId   String?
+  reason     String
+  status     ReportStatus @default(OPEN)
+  createdAt  DateTime     @default(now())
+  resolvedBy String?
+  resolvedAt DateTime?
+  note       Note?        @relation(fields: [noteId], references: [id], onDelete: Cascade)
+  reporter   User         @relation("ReporterReports", fields: [reporterId], references: [id])
+  resolver   User?        @relation("ResolverReports", fields: [resolvedBy], references: [id])
+  review     Review?      @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+
+  @@index([status, createdAt])
+}
+
+model DownloadLog {
+  id           String   @id @default(uuid())
+  noteId       String
+  userId       String
+  downloadedAt DateTime @default(now())
+  note         Note     @relation(fields: [noteId], references: [id], onDelete: Cascade)
+  user         User     @relation(fields: [userId], references: [id])
+
+  @@index([noteId, downloadedAt])
+}
+
+model AuthToken {
+  id             String           @id @default(uuid())
+  userId         String
+  tokenHash      String           @unique
+  purpose        AuthTokenPurpose
+  expiresAt      DateTime
+  usedAt         DateTime?
+  lastActivityAt DateTime?
+  user           User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, purpose])
+  @@index([userId, purpose, lastActivityAt])
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  userId     String?
+  action     String
+  entityType String
+  entityId   String?
+  metadata   Json?
+  createdAt  DateTime @default(now())
+  user       User?    @relation(fields: [userId], references: [id])
+
+  @@index([createdAt])
+  @@index([action])
+}
+
+enum Role {
+  STUDENT
+  ADMIN
+}
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+  DELETED
+}
+
+enum Visibility {
+  PUBLIC
+  LINK_ONLY
+  PRIVATE
+}
+
+enum NoteStatus {
+  ACTIVE
+  HIDDEN
+  REMOVED
+  DELETED
+}
+
+enum ReviewStatus {
+  ACTIVE
+  HIDDEN
+  REMOVED
+}
+
+enum ReportStatus {
+  OPEN
+  RESOLVED
+  DISMISSED
+}
+
+enum AuthTokenPurpose {
+  EMAIL_VERIFICATION
+  PASSWORD_RESET
+  SESSION
+}
